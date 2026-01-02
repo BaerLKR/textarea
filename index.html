@@ -20,14 +20,18 @@
     background-color: #fff;
     --elevated: #fff;
     --link: #0066cc;
-    color: #161616;
+    --text: #161616;
 
     @media (prefers-color-scheme: dark) {
       background-color: #000;
       --elevated: #121212;
       --link: #58a6ff;
-      color: #fff;
+      --text: #fff;
     }
+  }
+
+  body {
+    color: var(--text);
   }
 
   a {
@@ -180,6 +184,7 @@
   }
 
   #menu .item {
+    display: block;
     cursor: pointer;
     text-decoration: none;
     text-align: left;
@@ -191,11 +196,14 @@
     border: none;
     touch-action: manipulation;
     font: 16px / 1.5 system-ui;
-    color: inherit;
+    color: var(--text);
   }
 
-  #menu .item:visited {
-    color: inherit;
+  #menu .item:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+    @media (prefers-color-scheme: dark) {
+      background-color: #353535;
+    }
   }
 
   #menu .item:first-child {
@@ -208,21 +216,13 @@
     border-bottom-right-radius: 10px;
   }
 
-  #menu .item:hover {
-    background-color: rgba(0, 0, 0, 0.04);
-    @media (prefers-color-scheme: dark) {
-      background-color: #353535;
-    }
-  }
-
   @media print {
     .noprint {
       visibility: hidden !important;
     }
   }
 </style>
-<article contenteditable="plaintext-only" spellcheck></article>
-
+<article contenteditable="plaintext-only" spellcheck autofocus></article>
 <button id="button" class="noprint">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
        stroke="currentColor"
@@ -234,7 +234,7 @@
 </button>
 <div id="menu">
   <a class="item" href="#new" target="_blank">New document</a>
-  <a class="item" id="qr">Generate QR code</a>
+  <a class="item" id="qr" href="/qr" target="_blank">Generate QR code</a>
   <a class="item" href="https://github.com/antonmedv/textarea" target="_blank">GitHub</a>
 </div>
 <script>
@@ -268,12 +268,10 @@
       else {
         await set(localStorage.getItem('hash') ?? '')
         if (article.textContent) history.replaceState({}, '', await get())
-        article.focus()
       }
     } catch (e) {
       article.textContent = ''
       article.removeAttribute('style')
-      article.focus()
     }
     updateTitle()
   }
@@ -450,6 +448,7 @@
     button.addEventListener('click', event => {
       ripple(event)
       menu.classList.toggle('visible')
+      qr.setAttribute('href', '/qr' + location.hash)
     })
 
     document.body.addEventListener('click', event => {
@@ -458,10 +457,6 @@
       if (t.closest('#button')) return
       if (t.closest('.ripple')) return
       menu.classList.remove('visible')
-    })
-
-    qr.addEventListener('click', () => {
-      location.href = '/qr' + location.hash
     })
   }
 
@@ -482,9 +477,7 @@
   function Editor(element, highlight) {
     const listeners = []
     const history = []
-    let at = -1
-    let focus = false
-    let prev
+    let at = -1, prev
 
     const debounceHighlight = debounce(30, () => {
       const pos = save()
@@ -512,7 +505,6 @@
       listeners.push([type, fn])
       element.addEventListener(type, fn)
     }
-
     on('keydown', event => {
       if (event.defaultPrevented) return
       prev = toString()
@@ -523,34 +515,14 @@
         recording = true
       }
     })
-
     on('keyup', event => {
       if (event.defaultPrevented) return
       if (event.isComposing) return
       if (prev !== toString()) debounceHighlight()
       debounceRecordHistory(event)
     })
-
-    on('focus', _event => {
-      focus = true
-    })
-
-    on('blur', _event => {
-      focus = false
-    })
-
-    on('paste', event => {
-      recordHistory()
-      handlePaste(event)
-      recordHistory()
-    })
-
-    on('cut', event => {
-      recordHistory()
-      handleCut(event)
-      recordHistory()
-    })
-
+    on('paste', () => setTimeout(recordHistory, 10))
+    on('cut', () => setTimeout(recordHistory, 10))
     on('beforeinput', event => {
       if (event.inputType === 'historyUndo') doUndo(event)
       if (event.inputType === 'historyRedo') doRedo(event)
@@ -714,15 +686,15 @@
     }
 
     function recordHistory() {
-      if (!focus) return
       const html = element.innerHTML
       const pos = save()
       const lastRecord = history[at]
-      if (lastRecord) {
-        if (lastRecord.html === html
-          && lastRecord.pos.start === pos.start
-          && lastRecord.pos.end === pos.end) return
-      }
+      if (
+        lastRecord
+        && lastRecord.html === html
+        && lastRecord.pos.start === pos.start
+        && lastRecord.pos.end === pos.end
+      ) return
       at++
       history[at] = {html, pos}
       history.splice(at + 1)
@@ -731,36 +703,6 @@
         at = maxHistory
         history.splice(0, 1)
       }
-    }
-
-    function handlePaste(event) {
-      if (event.defaultPrevented) return
-      preventDefault(event)
-      const originalEvent = event.originalEvent ?? event
-      const text = originalEvent.clipboardData.getData('text/plain').replace(/\r\n?/g, '\n')
-      const pos = save()
-      insert(text)
-      highlight(element)
-      restore({
-        start: Math.min(pos.start, pos.end) + text.length,
-        end: Math.min(pos.start, pos.end) + text.length,
-        dir: '<-',
-      })
-    }
-
-    function handleCut(event) {
-      const pos = save()
-      const selection = getSelection()
-      const originalEvent = event.originalEvent ?? event
-      originalEvent.clipboardData.setData('text/plain', selection.toString())
-      document.execCommand('delete')
-      highlight(element)
-      restore({
-        start: Math.min(pos.start, pos.end),
-        end: Math.min(pos.start, pos.end),
-        dir: '<-',
-      })
-      preventDefault(event)
     }
 
     function visit(editor, visitor) {
@@ -787,17 +729,6 @@
       return isCtrl(event) && event.shiftKey && event.key === 'z'
     }
 
-    function insert(text) {
-      text = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
-      document.execCommand('insertHTML', false, text)
-    }
-
-
     function toString() {
       return element.textContent || ''
     }
@@ -811,10 +742,13 @@
     }
 
     return {
-      set(code) {
-        element.textContent = code
-        highlight(element)
-      }
+      set(content) {
+        element.textContent = content
+        if (content.length < 100_000) highlight(element)
+      },
+      destroy() {
+        for (const [type, fn] of listeners) editor.removeEventListener(type, fn)
+      },
     }
   }
 </script>
