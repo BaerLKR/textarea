@@ -382,12 +382,14 @@
       {name: 'md-h6', re: /^######[ \t]+[^\n]*$/my},
       {name: 'md-code', re: /`[^`\n]*`/y},
       {name: 'md-bold', re: /\*\*[^*\n]+?\*\*/y},
+      {name: 'md-bold', re: /__[^_\n]+?__/y},
       {name: 'md-strike', re: /~~[^~\n]+?~~/y},
       {name: 'md-italic', re: /\*[^*\n]+?\*/y},
+      {name: 'md-italic', re: /_[^_\n]+?_/y},
       {name: 'md-url', re: /https?:\/\/[^\s<>()\[\]{}"'`]+/y},
     ]
 
-    const specials = ['`', '~', '*', '#', 'h']
+    const specials = ['`', '~', '*', '#', '_', 'h']
 
     let i = 0
     while (i < input.length) {
